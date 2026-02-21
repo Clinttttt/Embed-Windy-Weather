@@ -1,0 +1,542 @@
+﻿@page "/weather"
+@rendermode InteractiveServer
+@inject HttpClient Http
+@implements IDisposable
+
+<style>
+    .weather-wrapper {
+        position: fixed;
+        top: 56px;
+        left: 250px;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+    }
+
+        .weather-wrapper iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+    .weather-panel {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 230px;
+        background: rgba(10, 15, 30, 0.78);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        z-index: 999;
+        padding: 14px;
+        color: white;
+        font-family: 'Segoe UI', sans-serif;
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        overflow-y: auto;
+        max-height: calc(100vh - 56px - 80px);
+    }
+
+    .panel-location {
+        font-size: 11px;
+        color: #90cdf4;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 2px;
+    }
+
+    .panel-coords {
+        font-size: 10px;
+        color: #4a5568;
+        margin-bottom: 2px;
+    }
+
+    .panel-updated {
+        font-size: 9px;
+        color: #4a5568;
+        margin-bottom: 8px;
+    }
+
+    .alert-badge {
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .alert-normal {
+        background: rgba(72,187,120,0.2);
+        border: 1px solid #48bb78;
+        color: #9ae6b4;
+    }
+
+    .alert-warning {
+        background: rgba(237,137,54,0.2);
+        border: 1px solid #ed8936;
+        color: #fbd38d;
+    }
+
+    .alert-danger {
+        background: rgba(245,101,101,0.2);
+        border: 1px solid #f56565;
+        color: #feb2b2;
+    }
+
+    .sun-row {
+        display: flex;
+        justify-content: space-between;
+        background: rgba(255,255,255,0.05);
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        font-size: 11px;
+    }
+
+    .sun-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+
+        .sun-item .sun-lbl {
+            font-size: 9px;
+            color: #718096;
+            text-transform: uppercase;
+        }
+
+        .sun-item .sun-val {
+            color: #fbd38d;
+            font-weight: 600;
+        }
+
+    .weather-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .weather-card {
+        background: rgba(255,255,255,0.06);
+        border-radius: 10px;
+        padding: 10px 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+
+        .weather-card .lbl {
+            font-size: 9px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .weather-card .val {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .weather-card .unt {
+            font-size: 10px;
+            color: #90cdf4;
+            margin-top: 2px;
+        }
+
+        .weather-card.full {
+            grid-column: span 2;
+        }
+
+    .divider {
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        margin: 10px 0;
+    }
+
+    .section-lbl {
+        font-size: 9px;
+        color: #4a5568;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+
+    .forecast-row {
+        display: flex;
+        gap: 5px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        margin-bottom: 10px;
+    }
+
+    .forecast-item {
+        flex: 0 0 auto;
+        background: rgba(255,255,255,0.06);
+        border-radius: 8px;
+        padding: 6px 8px;
+        text-align: center;
+        font-size: 10px;
+        border: 1px solid rgba(255,255,255,0.05);
+        min-width: 48px;
+    }
+
+        .forecast-item .f-time {
+            color: #718096;
+            margin-bottom: 3px;
+        }
+
+        .forecast-item .f-icon {
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .forecast-item .f-temp {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .forecast-item .f-rain {
+            color: #90cdf4;
+            font-size: 9px;
+        }
+
+    .layer-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
+    }
+
+    .layer-btn {
+        padding: 6px 4px;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+        color: #a0aec0;
+        cursor: pointer;
+        font-size: 11px;
+        text-align: center;
+        transition: all 0.2s;
+    }
+
+        .layer-btn:hover {
+            background: rgba(255,255,255,0.12);
+            color: white;
+        }
+
+        .layer-btn.active {
+            background: #2b6cb0;
+            border-color: #63b3ed;
+            color: white;
+        }
+
+    .loading-spinner {
+        text-align: center;
+        padding: 20px 0;
+        color: #718096;
+        font-size: 12px;
+    }
+</style>
+
+<div class="weather-wrapper">
+    <iframe id="windy-iframe"
+            src="https://embed.windy.com/embed2.html?lat=9.3375&lon=125.9958&detailLat=9.3375&detailLon=125.9958&zoom=9&level=surface&overlay=@overlay&product=ecmwf&menu=false&message=true&marker=true&calendar=now&pressure=true&type=map&location=coordinates&detail=false&metricWind=kt&metricTemp=°C&radarRange=-1">
+    </iframe>
+
+    <div class="weather-panel">
+        <div class="panel-location">📍 Cantilan, Surigao del Sur</div>
+        <div class="panel-coords">9.3375°N, 125.9958°E</div>
+        <div class="panel-updated">🕐 @lastUpdated</div>
+
+        @if (isLoading)
+        {
+            <div class="loading-spinner">⏳ Fetching weather...</div>
+        }
+        else if (weather != null)
+        {
+            <div class="alert-badge @GetAlertClass()">
+                @GetAlertIcon() @GetAlertMessage()
+            </div>
+
+            <div class="sun-row">
+                <div class="sun-item">
+                    <span class="sun-lbl">Sunrise</span>
+                    <span class="sun-val">🌅 @sunrise</span>
+                </div>
+                <div class="sun-item">
+                    <span class="sun-lbl">Feels Like</span>
+                    <span class="sun-val">🌡 @weather.FeelsLike°C</span>
+                </div>
+                <div class="sun-item">
+                    <span class="sun-lbl">Sunset</span>
+                    <span class="sun-val">🌇 @sunset</span>
+                </div>
+            </div>
+
+            <div class="weather-grid">
+                <div class="weather-card">
+                    <div class="lbl">🌡 Temp</div>
+                    <div class="val">@weather.Temperature</div>
+                    <div class="unt">°C</div>
+                </div>
+                <div class="weather-card">
+                    <div class="lbl">🌧 Rain Today</div>
+                    <div class="val">@todayRainTotal</div>
+                    <div class="unt">mm total</div>
+                </div>
+                <div class="weather-card">
+                    <div class="lbl">💨 Wind</div>
+                    <div class="val">@weather.WindSpeed</div>
+                    <div class="unt">kt</div>
+                </div>
+                <div class="weather-card">
+                    <div class="lbl">💨 Gusts</div>
+                    <div class="val">@weather.WindGusts</div>
+                    <div class="unt">kt</div>
+                </div>
+                <div class="weather-card">
+                    <div class="lbl">☁ Clouds</div>
+                    <div class="val">@weather.CloudCover</div>
+                    <div class="unt">%</div>
+                </div>
+                <div class="weather-card">
+                    <div class="lbl">💧 Humidity</div>
+                    <div class="val">@weather.Humidity</div>
+                    <div class="unt">%</div>
+                </div>
+                <div class="weather-card full">
+                    <div class="lbl">🧭 Wind Direction</div>
+                    <div style="font-size:13px; font-weight:600; color:white;">
+                        @weather.WindDirection° — @GetWindDirectionLabel(weather.WindDirection)
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-lbl">🕐 Next 6 Hours</div>
+            <div class="forecast-row">
+                @foreach (var f in forecast)
+                {
+                    <div class="forecast-item">
+                        <div class="f-time">@f.Hour</div>
+                        <div class="f-icon">@f.Icon</div>
+                        <div class="f-temp">@f.Temp°</div>
+                        <div class="f-rain">@f.Rain mm</div>
+                    </div>
+                }
+            </div>
+        }
+
+        <hr class="divider" />
+        <div class="section-lbl">Switch Layer</div>
+        <div class="layer-grid">
+            <button class="layer-btn @(overlay == "wind" ? "active" : "")" @onclick='() => SetOverlay("wind")'>💨 Wind</button>
+            <button class="layer-btn @(overlay == "rain" ? "active" : "")" @onclick='() => SetOverlay("rain")'>🌧 Rain</button>
+            <button class="layer-btn @(overlay == "temp" ? "active" : "")" @onclick='() => SetOverlay("temp")'>🌡 Temp</button>
+            <button class="layer-btn @(overlay == "clouds" ? "active" : "")" @onclick='() => SetOverlay("clouds")'>☁ Clouds</button>
+            <button class="layer-btn @(overlay == "waves" ? "active" : "")" @onclick='() => SetOverlay("waves")'>🌊 Waves</button>
+            <button class="layer-btn @(overlay == "pressure" ? "active" : "")" @onclick='() => SetOverlay("pressure")'>📊 Pressure</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string overlay = "wind";
+    private bool isLoading = false;
+    private string lastUpdated = "—";
+    private string sunrise = "—";
+    private string sunset = "—";
+    private double todayRainTotal = 0;
+    private WeatherData? weather = null;
+    private List<ForecastItem> forecast = new();
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await FetchWeather();
+        _timer = new Timer(async _ =>
+        {
+            await FetchWeather();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(15));
+    }
+
+    private async Task FetchWeather()
+    {
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var url = "https://api.open-meteo.com/v1/forecast?latitude=9.3375&longitude=125.9958" +
+                      "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation," +
+                      "cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m" +
+                      "&hourly=temperature_2m,precipitation,cloud_cover" +
+                      "&daily=sunrise,sunset,precipitation_sum" +
+                      "&wind_speed_unit=kn&timezone=Asia/Manila&forecast_days=1";
+
+            var response = await Http.GetFromJsonAsync<OpenMeteoResponse>(url);
+
+            if (response?.current != null)
+            {
+                weather = new WeatherData
+                {
+                    Temperature = Math.Round(response.current.temperature_2m, 1),
+                    FeelsLike = Math.Round(response.current.apparent_temperature, 1),
+                    Precipitation = Math.Round(response.current.precipitation, 2),
+                    WindSpeed = Math.Round(response.current.wind_speed_10m, 1),
+                    WindGusts = Math.Round(response.current.wind_gusts_10m, 1),
+                    WindDirection = (int)response.current.wind_direction_10m,
+                    CloudCover = (int)response.current.cloud_cover,
+                    Humidity = (int)response.current.relative_humidity_2m
+                };
+
+                lastUpdated = "Updated: " + DateTime.Now.ToString("hh:mm tt");
+            }
+
+            // Sunrise / Sunset
+            if (response?.daily?.sunrise?.Length > 0)
+                sunrise = DateTime.Parse(response.daily.sunrise[0]).ToString("hh:mm tt");
+            if (response?.daily?.sunset?.Length > 0)
+                sunset = DateTime.Parse(response.daily.sunset[0]).ToString("hh:mm tt");
+
+            // Today's total rainfall
+            if (response?.daily?.precipitation_sum?.Length > 0)
+                todayRainTotal = Math.Round(response.daily.precipitation_sum[0], 1);
+
+            // 6-hour forecast
+            forecast.Clear();
+            if (response?.hourly != null)
+            {
+                var now = DateTime.Now.Hour;
+                int count = 0;
+                for (int i = 0; i < response.hourly.time.Length && count < 6; i++)
+                {
+                    var t = DateTime.Parse(response.hourly.time[i]);
+                    if (t.Hour >= now)
+                    {
+                        forecast.Add(new ForecastItem
+                        {
+                            Hour = t.ToString("h tt"),
+                            Temp = Math.Round(response.hourly.temperature_2m[i], 1),
+                            Rain = Math.Round(response.hourly.precipitation[i], 1),
+                            Icon = GetWeatherIcon(response.hourly.cloud_cover[i], response.hourly.precipitation[i])
+                        });
+                        count++;
+                    }
+                }
+            }
+        }
+        catch { }
+
+        isLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string GetWeatherIcon(double clouds, double rain) =>
+        rain > 2 ? "⛈" :
+        rain > 0.5 ? "🌧" :
+        clouds > 80 ? "☁" :
+        clouds > 40 ? "⛅" : "☀";
+
+    private string GetAlertClass()
+    {
+        if (weather == null) return "alert-normal";
+        if (todayRainTotal > 30 || weather.WindGusts > 34) return "alert-danger";
+        if (todayRainTotal > 10 || weather.WindGusts > 17) return "alert-warning";
+        return "alert-normal";
+    }
+
+    private string GetAlertIcon()
+    {
+        if (weather == null) return "✅";
+        if (todayRainTotal > 30 || weather.WindGusts > 34) return "🔴";
+        if (todayRainTotal > 10 || weather.WindGusts > 17) return "🟡";
+        return "🟢";
+    }
+
+    private string GetAlertMessage()
+    {
+        if (weather == null) return "Normal";
+        if (todayRainTotal > 30) return "Heavy Rain Warning!";
+        if (weather.WindGusts > 34) return "Strong Wind Warning!";
+        if (todayRainTotal > 10) return "Moderate Rain Today";
+        if (weather.WindGusts > 17) return "Moderate Winds";
+        return "Weather Normal";
+    }
+
+    private void SetOverlay(string newOverlay) => overlay = newOverlay;
+
+    private string GetWindDirectionLabel(int d) => d switch
+    {
+        <= 22 or > 337 => "North",
+        <= 67 => "Northeast",
+        <= 112 => "East",
+        <= 157 => "Southeast",
+        <= 202 => "South",
+        <= 247 => "Southwest",
+        <= 292 => "West",
+        _ => "Northwest"
+    };
+
+    public void Dispose() => _timer?.Dispose();
+
+    // ── Models ──────────────────────────────────────────
+    public class WeatherData
+    {
+        public double Temperature { get; set; }
+        public double FeelsLike { get; set; }
+        public double Precipitation { get; set; }
+        public double WindSpeed { get; set; }
+        public double WindGusts { get; set; }
+        public int WindDirection { get; set; }
+        public int CloudCover { get; set; }
+        public int Humidity { get; set; }
+    }
+
+    public class ForecastItem
+    {
+        public string Hour { get; set; } = "";
+        public double Temp { get; set; }
+        public double Rain { get; set; }
+        public string Icon { get; set; } = "";
+    }
+
+    public class OpenMeteoResponse
+    {
+        public CurrentWeather? current { get; set; }
+        public HourlyWeather? hourly { get; set; }
+        public DailyWeather? daily { get; set; }
+    }
+
+    public class CurrentWeather
+    {
+        public double temperature_2m { get; set; }
+        public double apparent_temperature { get; set; }
+        public double relative_humidity_2m { get; set; }
+        public double precipitation { get; set; }
+        public double cloud_cover { get; set; }
+        public double wind_speed_10m { get; set; }
+        public double wind_direction_10m { get; set; }
+        public double wind_gusts_10m { get; set; }
+    }
+
+    public class HourlyWeather
+    {
+        public string[] time { get; set; } = [];
+        public double[] temperature_2m { get; set; } = [];
+        public double[] precipitation { get; set; } = [];
+        public double[] cloud_cover { get; set; } = [];
+    }
+
+    public class DailyWeather
+    {
+        public string[] sunrise { get; set; } = [];
+        public string[] sunset { get; set; } = [];
+        public double[] precipitation_sum { get; set; } = [];
+    }
+}
